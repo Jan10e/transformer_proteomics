@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+import math
+
 class RefinedOmicsTransformer(nn.Module):
     def __init__(self, input_dims, output_dim, hidden_dim=256, num_heads=8,
                  num_layers=6, dropout=0.1, use_batch_norm=True, use_input_norm=True,
@@ -141,3 +143,229 @@ class RefinedOmicsTransformer(nn.Module):
         output = self.prediction_head(pooled)
 
         return output, attention_weights.squeeze(1)
+    
+
+
+class ModularMultiOmicsTransformer(nn.Module):
+    def __init__(self, input_dims, output_dim, num_heads=8, num_layers=4, 
+                 hidden_dim=256, dropout_rate=0.1, fusion_method="hierarchical",
+                 activation_function="gelu"):
+        """
+        Modular Transformer-based model with various fusion strategies and configurable activation
+        
+        Args:
+            input_dims: Dictionary mapping omics type to its feature dimension
+            output_dim: Number of proteomics features to predict
+            fusion_method: One of ["hierarchical", "late", "gated", "weighted", "cross_attention"]
+            activation_function: One of ["gelu", "relu"]. PyTorch only allows relu or gelu.
+        """
+        super(ModularMultiOmicsTransformer, self).__init__()
+        
+        self.fusion_method = fusion_method
+        self.num_modalities = len(input_dims)
+        
+        # Get the specified activation function
+        self.activation = self._get_activation_function(activation_function)
+        
+        # Create an embedding layer for each omics type
+        self.embeddings = nn.ModuleDict({
+            omics_type: nn.Sequential(
+                nn.Linear(dim, hidden_dim),
+                nn.LayerNorm(hidden_dim),
+                self.activation
+            ) for omics_type, dim in input_dims.items()
+        })
+        
+        # Create separate transformer encoders for each modality
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            dropout=dropout_rate,
+            activation=activation_function,
+            batch_first=True,
+            norm_first=True
+        )
+        
+        self.modality_transformers = nn.ModuleDict({
+            omics_type: nn.TransformerEncoder(
+                encoder_layer, 
+                num_layers=2
+            ) for omics_type in input_dims.keys()
+        })
+        
+        # Generate positional encodings once
+        self.register_buffer(
+            "pos_encoding", 
+            self._generate_positional_encoding(len(input_dims), hidden_dim)
+        )
+        
+        # Type embeddings for all fusion methods
+        self.type_embeddings = nn.Embedding(len(input_dims), hidden_dim)
+        
+        # Fusion-specific modules
+        if fusion_method == "hierarchical":
+            # For hierarchical fusion: modality -> joint processing
+            self.joint_transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+            
+        elif fusion_method == "late":
+            # For late fusion: process each modality separately, then combine
+            self.fusion_layer = nn.Linear(hidden_dim * len(input_dims), hidden_dim)
+            
+        elif fusion_method == "gated":
+            # For gated fusion: learn importance of each modality
+            self.gate_networks = nn.ModuleDict({
+                omics_type: nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.LayerNorm(hidden_dim),
+                    self.activation,
+                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.Sigmoid()
+                ) for omics_type in input_dims.keys()
+            })
+            
+        elif fusion_method == "weighted":
+            # For weighted fusion: learn a weight for each modality
+            self.modality_weights = nn.Parameter(torch.ones(len(input_dims)) / len(input_dims))
+            self.softmax = nn.Softmax(dim=0)
+            
+        elif fusion_method == "cross_attention":
+            # For cross-attention: joint transformer with attention pooling
+            self.joint_transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+            self.attention_pooling = nn.Sequential(
+                nn.Linear(hidden_dim, 1),
+                nn.Softmax(dim=1)
+            )
+        
+        # Final prediction layers
+        self.fc_layers = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim * 2),  # expand dimensionality to capture more complex interactions in data
+            nn.LayerNorm(hidden_dim * 2), # normalise activations of preveious layer
+            self.activation,  # activation function (ReLU or GeLU)
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim * 2, hidden_dim),  # reduce dimensionality back, i.e. focus on most important patterns
+            nn.LayerNorm(hidden_dim), # normalise
+            self.activation,  # activation function (ReLU or GeLU)
+            nn.Dropout(dropout_rate/2), # smaller dropout rate to retain more info for the final prediction
+        )
+        
+        self.output_layer = nn.Linear(hidden_dim, output_dim)
+        self._init_weights()
+    
+    def _get_activation_function(self, name):
+        """Return the activation function based on name"""
+        activations = {
+            "gelu": nn.GELU(),
+            "relu": nn.ReLU(),
+        }
+        return activations.get(name.lower(), nn.GELU())
+        
+    def _generate_positional_encoding(self, seq_len, d_model):
+        """Generate positional encodings for the Transformer"""
+        pos_encoding = torch.zeros(1, seq_len, d_model)
+        position = torch.arange(0, seq_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
+        
+        pos_encoding[0, :, 0::2] = torch.sin(position * div_term)
+        pos_encoding[0, :, 1::2] = torch.cos(position * div_term)
+        
+        return pos_encoding
+    
+    def _init_weights(self):
+        """Initialise weights using Xavier/Glorot initialisation"""
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+    
+    def forward(self, x_dict):
+        """
+        Forward pass
+        
+        Args:
+            x_dict: Dictionary mapping omics type to tensor of shape [batch_size, features]
+        """
+        # Determine batch size of input data. As this will be used for various combinations of input data.
+        batch_size = next(iter(x_dict.values())).size(0)
+        
+        # Process each modality separately first
+        modality_features = {}
+        embedded_features = []
+        modality_indices = []
+        for i, (omics_type, x) in enumerate(x_dict.items()):
+            
+            # Embed to common dimension
+            embedded = self.embeddings[omics_type](x)  # [batch_size, hidden_dim]
+            embedded = embedded.unsqueeze(1)  # [batch_size, 1, hidden_dim]
+            
+            # Store for fusion methods that need individual modality features
+            modality_features[omics_type] = embedded.squeeze(1)  # [batch_size, hidden_dim]
+            
+            # Store for fusion methods that need concatenated features
+            embedded_features.append(embedded)
+            modality_indices.append(i)
+            
+            # Process with modality-specific transformer if not using cross_attention
+            if self.fusion_method != "cross_attention":
+                transformed = self.modality_transformers[omics_type](embedded)
+                # Squeeze to remove sequence dimension (only 1 token per modality)
+                modality_features[omics_type] = transformed.squeeze(1)  # [batch_size, hidden_dim]
+        
+        # Apply fusion method
+        if self.fusion_method == "hierarchical" or self.fusion_method == "cross_attention":
+            # Concatenate along sequence dimension
+            x = torch.cat(embedded_features, dim=1)  # [batch_size, num_omics, hidden_dim]
+            
+            # Add positional encoding and type embeddings
+            type_ids = torch.tensor(modality_indices, device=x.device).expand(batch_size, -1)
+            type_embeds = self.type_embeddings(type_ids)
+            x = x + self.pos_encoding.to(x.device) + type_embeds
+            
+            # Apply joint transformer
+            x = self.joint_transformer(x)  # [batch_size, num_omics, hidden_dim]
+            
+            if self.fusion_method == "hierarchical":
+                # Take average of all modality representations
+                fused = torch.mean(x, dim=1)  # [batch_size, hidden_dim]
+            else:  # cross_attention
+                # Use attention pooling
+                attn_weights = self.attention_pooling(x)  # [batch_size, num_omics, 1]
+                fused = torch.sum(x * attn_weights, dim=1)  # [batch_size, hidden_dim]
+            
+        elif self.fusion_method == "late":
+            # Concatenate all modality features
+            concatenated = torch.cat([
+                modality_features[omics_type] for omics_type in x_dict.keys()
+            ], dim=1)  # [batch_size, hidden_dim * num_omics]
+            
+            # Project back to hidden_dim
+            fused = self.fusion_layer(concatenated)  # [batch_size, hidden_dim]
+            
+        elif self.fusion_method == "gated":
+            # Apply gates to each modality
+            gated_features = []
+            for omics_type in x_dict.keys():
+                gate = self.gate_networks[omics_type](modality_features[omics_type])
+                gated = modality_features[omics_type] * gate
+                gated_features.append(gated)
+            
+            # Sum all gated features
+            fused = sum(gated_features)  # [batch_size, hidden_dim]
+            
+        elif self.fusion_method == "weighted":
+            # Apply learned weights to each modality
+            weights = self.softmax(self.modality_weights)
+            
+            weighted_sum = None
+            for i, omics_type in enumerate(x_dict.keys()):
+                if weighted_sum is None:
+                    weighted_sum = weights[i] * modality_features[omics_type]
+                else:
+                    weighted_sum += weights[i] * modality_features[omics_type]
+            
+            fused = weighted_sum  # [batch_size, hidden_dim]
+        
+        # Final prediction
+        features = self.fc_layers(fused)
+        output = self.output_layer(features)
+        
+        return output
