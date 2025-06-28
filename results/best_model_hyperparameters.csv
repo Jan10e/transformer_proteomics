@@ -1,2 +1,2 @@
 num_heads,num_layers,hidden_dim,dropout_rate,learning_rate,weight_decay,fusion_method,activation_function
-4,6,384,0.1,0.0009052341259832195,1.1016969061267455e-06,gated,relu
+16,4,448,0.1,0.00051149663260507,1.4010233660012826e-05,gated,gelu
