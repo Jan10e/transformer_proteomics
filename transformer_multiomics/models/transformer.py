@@ -4,6 +4,104 @@ import torch.nn as nn
 import math
 
 class RefinedOmicsTransformer(nn.Module):
+    """
+    Multi-omics transformer model for integrating heterogeneous biological data types.
+    
+    This transformer architecture is specifically designed to handle tabular omics data
+    (proteomics, transcriptomics, methylation, etc.) by treating each modality as a 
+    sequence token and learning cross-modal relationships through self-attention.
+    
+    Architecture Overview:
+    ---------------------
+    1. Each omics modality is embedded into a shared hidden dimension space
+    2. Optional modality-specific embeddings are added to distinguish data types
+    3. Transformer encoder processes the multi-modal sequence
+    4. Attention pooling aggregates information across modalities
+    5. Feed-forward prediction head generates final output
+    
+    Key Features:
+    -------------
+    - Handles variable input dimensions across modalities
+    - Learnable feature importance weighting per modality
+    - Multiple pooling strategies (attention, mean, max, concat)
+    - Configurable normalization and activation functions
+    - Built-in attention weights for interpretability
+    
+    Parameters:
+    -----------
+    input_dims : dict
+        Dictionary mapping modality names to their input dimensions.
+        Example: {'proteomics': 1000, 'transcriptomics': 20000, 'methylation': 5000}
+    output_dim : int
+        Dimension of the final output (e.g., number of classes or regression targets)
+    hidden_dim : int, default=256
+        Hidden dimension size for transformer embeddings and processing
+    num_heads : int, default=8
+        Number of attention heads in transformer layers
+    num_layers : int, default=6
+        Number of transformer encoder layers
+    dropout : float, default=0.1
+        Dropout probability for regularization
+    use_batch_norm : bool, default=True
+        Whether to use BatchNorm1d in embedding layers
+    use_input_norm : bool, default=True
+        Whether to apply LayerNorm to raw inputs
+    activation_fn : str or nn.Module, default="gelu"
+        Activation function ('gelu', 'relu', 'identity' or PyTorch module)
+    use_modality_embedding : bool, default=True
+        Whether to add learnable modality-specific embeddings
+    pooling_type : str, default="attention"
+        Pooling strategy ('attention', 'mean', 'max', 'concat')
+    
+    Input Format:
+    -------------
+    x_dict : dict
+        Dictionary with modality names as keys and torch.Tensor as values.
+        Each tensor should have shape [batch_size, modality_features].
+        
+    Returns:
+    --------
+    output : torch.Tensor
+        Model predictions with shape [batch_size, output_dim]
+    attention_weights : torch.Tensor
+        Attention weights across modalities with shape [batch_size, num_modalities]
+        (only meaningful when pooling_type='attention')
+    
+    Example Usage:
+    --------------
+    >>> input_dims = {
+    ...     'proteomics': 1000,
+    ...     'transcriptomics': 20000,
+    ...     'methylation': 5000
+    ... }
+    >>> model = RefinedOmicsTransformer(
+    ...     input_dims=input_dims,
+    ...     output_dim=2,  # binary classification
+    ...     hidden_dim=128,
+    ...     num_heads=4,
+    ...     num_layers=3
+    ... )
+    >>> 
+    >>> # Sample input data
+    >>> batch_data = {
+    ...     'proteomics': torch.randn(32, 1000),
+    ...     'transcriptomics': torch.randn(32, 20000),
+    ...     'methylation': torch.randn(32, 5000)
+    ... }
+    >>> 
+    >>> predictions, attention_weights = model(batch_data)
+    >>> print(f"Predictions shape: {predictions.shape}")  # [32, 2]
+    >>> print(f"Attention weights shape: {attention_weights.shape}")  # [32, 3]
+    
+    Notes:
+    ------
+    - The model automatically handles different input dimensions across modalities
+    - Feature importance weights are learned during training and applied per modality
+    - Attention weights can be used for interpreting which modalities contribute
+      most to each prediction
+    - Input normalization is recommended for stable training across diverse omics scales
+    - The model supports both classification and regression tasks based on output_dim
+    """
     def __init__(self, input_dims, output_dim, hidden_dim=256, num_heads=8,
                  num_layers=6, dropout=0.1, use_batch_norm=True, use_input_norm=True,
                  activation_fn="gelu", use_modality_embedding=True, pooling_type="attention"):
