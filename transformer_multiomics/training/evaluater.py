@@ -1,8 +1,4 @@
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, explained_variance_score
-import numpy as np
 import torch
-from tqdm import tqdm
-
 from IPython.display import display, HTML
 import numpy as np
 import pandas as pd
@@ -58,6 +54,25 @@ def evaluate_model(model, test_loader, device, is_transformer=False, model_name=
         "predictions": all_predictions,
         "targets": all_targets,
     }
+
+def evaluate_model_optim(model, loader, criterion, device, return_attention_weights=False):
+    model.eval()
+    total_loss = 0.0
+    all_predictions = []
+    all_targets = []
+    with torch.no_grad():
+        for inputs_dict, targets in loader:
+            inputs_dict = {k: v.to(device) for k, v in inputs_dict.items()}
+            targets = targets.to(device)
+            outputs = model(inputs_dict)
+            loss = criterion(outputs, targets)
+            total_loss += loss.item() * targets.size(0)
+            all_predictions.append(outputs.cpu().numpy())
+            all_targets.append(targets.cpu().numpy())
+    avg_loss = total_loss / len(loader.dataset)
+    all_predictions = np.concatenate(all_predictions, axis=0)
+    all_targets = np.concatenate(all_targets, axis=0)
+    return avg_loss, (all_predictions, all_targets)
 
 
 def summarise_results(all_results, best_set):
@@ -298,3 +313,12 @@ def analyse_feature_level_performance(best_omics_set, best_params, datasets, dev
     plt.show()
     
     return feature_metrics
+
+
+def compute_metrics(targets, predictions):
+    return {
+        "R2": r2_score(targets.flatten(), predictions.flatten()),
+        "RMSE": np.sqrt(mean_squared_error(targets, predictions)),
+        "MAE": mean_absolute_error(targets, predictions),
+        "EVS": explained_variance_score(targets.flatten(), predictions.flatten())
+    }

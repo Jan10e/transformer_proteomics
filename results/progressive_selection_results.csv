@@ -1,3 +1,4 @@
 Step,Current Set,R²,RMSE,Added
-0,transcriptomics,0.8356173634529114,0.6994746288759274,
-1,transcriptomics+metabolomics,0.837546169757843,0.6953587891675832,metabolomics
+0,transcriptomics,0.8374556303024292,0.6955525915979353,
+1,transcriptomics+methylation,0.8376489877700806,0.6951386523704198,methylation
+2,transcriptomics+methylation+cnv,0.8378026485443115,0.6948096568015204,cnv
