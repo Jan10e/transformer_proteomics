@@ -15,7 +15,7 @@ from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, e
 
 
 from transformer_multiomics.config import MODEL_PATH, RESULT_PATH, DATA_PATH
-from transformer_multiomics.models.transformer import ModularMultiOmicsTransformer
+from transformer_multiomics.models.transformer import MultiOmicsTransformerFusion
 from transformer_multiomics.data.data_preparation import prepare_data_loaders
 
 
@@ -185,7 +185,7 @@ def train_and_evaluate(omics_set, best_params, datasets, device):
     train_loader, val_loader, test_loader, input_dims, output_dim = prepare_data_loaders(omics_set, datasets=datasets)
     
     # Use the best hyperparameters to instantiate the model
-    model = ModularMultiOmicsTransformer(
+    model = MultiOmicsTransformerFusion(
         input_dims=input_dims,
         output_dim=output_dim,
         num_heads=best_params["num_heads"],

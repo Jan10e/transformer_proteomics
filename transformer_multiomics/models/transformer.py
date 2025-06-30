@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import math
 
-class RefinedOmicsTransformer(nn.Module):
+class MultiOmicsTransformer(nn.Module):
     """
     Multi-omics transformer model for integrating heterogeneous biological data types.
     
@@ -74,7 +74,7 @@ class RefinedOmicsTransformer(nn.Module):
     ...     'transcriptomics': 20000,
     ...     'methylation': 5000
     ... }
-    >>> model = RefinedOmicsTransformer(
+    >>> model = MultiOmicsTransformer(
     ...     input_dims=input_dims,
     ...     output_dim=2,  # binary classification
     ...     hidden_dim=128,
@@ -105,7 +105,7 @@ class RefinedOmicsTransformer(nn.Module):
     def __init__(self, input_dims, output_dim, hidden_dim=256, num_heads=8,
                  num_layers=6, dropout=0.1, use_batch_norm=True, use_input_norm=True,
                  activation_fn="gelu", use_modality_embedding=True, pooling_type="attention"):
-        super(RefinedOmicsTransformer, self).__init__()
+        super(MultiOmicsTransformer, self).__init__()
 
         self.modalities = list(input_dims.keys())
         self.hidden_dim = hidden_dim
@@ -244,7 +244,7 @@ class RefinedOmicsTransformer(nn.Module):
     
 
 
-class ModularMultiOmicsTransformer(nn.Module):
+class MultiOmicsTransformerFusion(nn.Module):
     def __init__(self, input_dims, output_dim, num_heads=8, num_layers=4, 
                  hidden_dim=256, dropout_rate=0.1, fusion_method="hierarchical",
                  activation_function="gelu"):
@@ -257,7 +257,7 @@ class ModularMultiOmicsTransformer(nn.Module):
             fusion_method: One of ["hierarchical", "late", "gated", "weighted", "cross_attention"]
             activation_function: One of ["gelu", "relu"]. PyTorch only allows relu or gelu.
         """
-        super(ModularMultiOmicsTransformer, self).__init__()
+        super(MultiOmicsTransformerFusion, self).__init__()
         
         self.fusion_method = fusion_method
         self.num_modalities = len(input_dims)

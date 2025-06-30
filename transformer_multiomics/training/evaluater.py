@@ -13,7 +13,7 @@ from scipy.stats import zscore, pearsonr
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, explained_variance_score
 
 from transformer_multiomics.config import MODEL_PATH, RESULT_PATH, DATA_PATH
-from transformer_multiomics.models.transformer import ModularMultiOmicsTransformer
+from transformer_multiomics.models.transformer import MultiOmicsTransformerFusion
 from transformer_multiomics.data.data_preparation import prepare_data_loaders
 
 
@@ -203,7 +203,7 @@ def analyse_feature_level_performance(best_omics_set, best_params, datasets, dev
     
     # Separate out parameters from model vs. training process 
     model_params = {k: v for k, v in best_params.items() if k not in ['learning_rate', 'weight_decay', 'batch_size', 'epochs']}
-    model = ModularMultiOmicsTransformer(
+    model = MultiOmicsTransformerFusion(
         input_dims=input_dims,
         output_dim=output_dim,
         **model_params

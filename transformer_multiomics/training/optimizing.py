@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 import optuna
 
 from transformer_multiomics.data.data_preparation import prepare_data_loaders
-from transformer_multiomics.models.transformer import ModularMultiOmicsTransformer
+from transformer_multiomics.models.transformer import MultiOmicsTransformerFusion
 from transformer_multiomics.training.trainer import train_and_evaluate
 
 
@@ -66,7 +66,7 @@ def optimise_hyperparams(omics_set, datasets, n_trials=30, device=None):
                                                      ["gelu", "relu"])
         
         # Instantiate the model with the suggested hyperparameters
-        model = ModularMultiOmicsTransformer(
+        model = MultiOmicsTransformerFusion(
             input_dims=input_dims,
             output_dim=output_dim,
             num_heads=num_heads,
