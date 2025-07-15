@@ -1,28 +1,27 @@
+from pathlib import Path
+from typing import Any
+
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
-from typing import Any, Dict, List, Optional, Tuple, Union
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
-import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, explained_variance_score
 
-from transformer_multiomics.config import MODEL_PATH
-from transformer_multiomics.models.transformer import MultiOmicsTransformerFusion
 from transformer_multiomics.data.data_preparation import prepare_data_loaders
-from transformer_multiomics.training.evaluater import compute_metrics, evaluate_model
+from transformer_multiomics.models.transformer import MultiOmicsTransformerFusion
+from transformer_multiomics.training.evaluater import compute_metrics
 from transformer_multiomics.utils.plots import plot_loss_curves
+
 
 def evaluate_model_attn_weight(
     model: nn.Module,
     data_loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
-    return_attention_weights: bool = False
-) -> Tuple[float, Optional[List[torch.Tensor]]]:
+    return_attention_weights: bool = False,
+) -> tuple[float, list[torch.Tensor] | None]:
     """
     Evaluate the model on a given DataLoader.
 
@@ -44,16 +43,18 @@ def evaluate_model_attn_weight(
         for x_dict, targets in data_loader:
             x_dict = {k: v.to(device) for k, v in x_dict.items()}
             targets = targets.to(device)
+            result = model(x_dict)
             if return_attention_weights:
-                outputs, attn_weights = model(x_dict)
+                outputs, attn_weights = result if isinstance(result, tuple) else (result, None)
                 all_attention_weights.append(attn_weights.cpu())
             else:
-                outputs = model(x_dict)
+                outputs = result if not isinstance(result, tuple) else result[0]
             loss = criterion(outputs, targets)
             total_loss += loss.item() * targets.size(0)
 
     avg_loss = total_loss / len(data_loader.dataset)
     return avg_loss, all_attention_weights
+
 
 def train_model(
     model: nn.Module,
@@ -65,13 +66,13 @@ def train_model(
     epochs: int = 100,
     patience: int = 15,
     model_name: str = "model",
-    save_path: Optional[Union[str, Path]] = None,
+    save_path: str | Path | None = None,
     log_interval: int = 10,
-    return_attention_weights: bool = False
-) -> Union[
-    Tuple[nn.Module, List[float], List[float], float],
-    Tuple[nn.Module, List[float], List[float], float, List[torch.Tensor]]
-]:
+    return_attention_weights: bool = False,
+) -> (
+    tuple[nn.Module, list[float], list[float], float]
+    | tuple[nn.Module, list[float], list[float], float, list[torch.Tensor]]
+):
     """
     General training loop for PyTorch models with early stopping.
 
@@ -95,8 +96,8 @@ def train_model(
     best_loss = float("inf")
     counter = 0
     best_model_state = None
-    train_losses: List[float] = []
-    test_losses: List[float] = []
+    train_losses: list[float] = []
+    test_losses: list[float] = []
 
     print(f"Starting training for {model_name}...")
 
@@ -135,8 +136,10 @@ def train_model(
             counter += 1
 
         if epoch % log_interval == 0 or epoch == epochs - 1:
-            print(f"Epoch {epoch+1}/{epochs} | Train Loss: {epoch_train_loss:.4f} | "
-                  f"Test Loss: {epoch_test_loss:.4f} | Early Stopping: {counter}/{patience}")
+            print(
+                f"Epoch {epoch+1}/{epochs} | Train Loss: {epoch_train_loss:.4f} | "
+                f"Test Loss: {epoch_test_loss:.4f} | Early Stopping: {counter}/{patience}"
+            )
 
         if counter >= patience:
             print(f"\nEarly stopping at epoch {epoch+1}")
@@ -165,6 +168,7 @@ def train_model(
         return model, train_losses, test_losses, best_loss, final_attention_weights
     else:
         return model, train_losses, test_losses, best_loss
+
 
 # TODO: remove this when refactoring is complete
 # def train_and_evaluate(
@@ -327,34 +331,37 @@ def train_model(
 
 def build_model(omics_set, best_params, input_dims, output_dim, device):
     model_param_keys = [
-        "num_heads", "num_layers", "hidden_dim", "dropout_rate",
-        "fusion_method", "activation_function"
+        "num_heads",
+        "num_layers",
+        "hidden_dim",
+        "dropout_rate",
+        "fusion_method",
+        "activation_function",
     ]
     model_args = {k: best_params[k] for k in model_param_keys if k in best_params}
-    model = MultiOmicsTransformerFusion(
-        input_dims=input_dims,
-        output_dim=output_dim,
-        **model_args
-    ).to(device)
+    model = MultiOmicsTransformerFusion(input_dims=input_dims, output_dim=output_dim, **model_args).to(device)
     return model
+
 
 def build_optimizer(model, best_params):
     lr = best_params.get("learning_rate", 1e-3)
     weight_decay = best_params.get("weight_decay", 0)
     return optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
+
 def build_scheduler(optimizer, epochs):
     return CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 
+
 def train_and_evaluate(
-    omics_set: List[str],
-    best_params: Dict[str, Any],
-    datasets: Dict[str, Any],
+    omics_set: list[str],
+    best_params: dict[str, Any],
+    datasets: dict[str, Any],
     device: torch.device,
     epochs: int = 50,
     patience: int = 10,
-    save_path: Optional[Union[str, Path]] = None
-) -> Dict[str, Any]:
+    save_path: str | Path | None = None,
+) -> dict[str, Any]:
     print(f"\n{'-'*80}")
     print(f"Training final model for omics set: {omics_set}")
 
@@ -374,16 +381,12 @@ def train_and_evaluate(
         epochs=epochs,
         patience=patience,
         model_name=f"best_model_{'_'.join(omics_set)}",
-        save_path=save_path
+        save_path=save_path,
     )
 
     from transformer_multiomics.training.evaluater import evaluate_model_optim
-    test_loss, _ = evaluate_model_optim(
-        model=trained_model,
-        loader=test_loader,
-        criterion=nn.MSELoss(),
-        device=device
-    )
+
+    test_loss, _ = evaluate_model_optim(model=trained_model, loader=test_loader, criterion=nn.MSELoss(), device=device)
 
     all_predictions = []
     all_targets = []
@@ -401,11 +404,13 @@ def train_and_evaluate(
 
     # get metrics
     metrics = compute_metrics(all_targets, all_predictions)
-    metrics.update({
-        "Best_Val_Loss": best_val_loss,
-        "Train_Losses": train_losses,
-        "Val_Losses": val_losses
-    })
+    metrics.update(
+        {
+            "Best_Val_Loss": best_val_loss,
+            "Train_Losses": train_losses,
+            "Val_Losses": val_losses,
+        }
+    )
 
     # plot loss curves
     plot_loss_curves(train_losses, val_losses, patience)

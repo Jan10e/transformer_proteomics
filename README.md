@@ -129,7 +129,7 @@ This script will:
 
 -  Run the **EMBL_transformer_best_model.ipynb** to see the development of the Transformer model 
     ```bash
-    EMBL_transformer_best_model.ipynb
+    multiomics_transformer_performance_analysis.ipynb
     ```
 The script will:
 1. Load the omics data
