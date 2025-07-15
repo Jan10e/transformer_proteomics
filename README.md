@@ -19,9 +19,7 @@
 <a name="general-info"></a>
 ## General Info
 
-This repository contains a project for predictive modelling of proteomics data using a Transformer-based architecture. The goal is to predict proteomics data using transcriptomics data as input. The project compares a baseline MLP model with Transformer models to evaluate their performance and suitability for this task.
-
-The time reserved for this project was 2 weeks, although I had mainly time during the weekends and 2 evenings during the week.
+This repository contains a project for predictive modelling of proteomics data using a Transformer-based architecture. The goal is to predict proteomics data using multi-omics data (transcriptomics, methylation, metabolomics, cnv) as input. The project compares a baseline MLP model with the multi-omic Transformer models to evaluate their performance and suitability for this task.
 
 
 ### Repository Structure
