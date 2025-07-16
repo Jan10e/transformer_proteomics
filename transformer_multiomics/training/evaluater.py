@@ -226,7 +226,7 @@ def analyse_feature_level_performance(best_omics_set, best_params, datasets, dev
 
     # Load the best model weights
     model_name = f"best_model_{'_'.join(best_omics_set)}.pth"
-    model.load_state_dict(torch.load(MODEL_PATH / model_name))
+    model.load_state_dict(torch.load(MODEL_PATH / model_name), strict=False)
     model.eval()
 
     # Collect predictions and targets

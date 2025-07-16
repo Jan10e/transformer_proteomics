@@ -1,2 +1,3 @@
-Step,Current Set,R²,RMSE
-0,transcriptomics,0.8378440737724304,0.6947209059576416
+Step,Current Set,R²,RMSE,Added
+0,transcriptomics,0.8376420736312866,0.6951535289639983,
+1,transcriptomics+metabolomics,0.8379924893379211,0.69440297850682,metabolomics
