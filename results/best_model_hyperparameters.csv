@@ -1,2 +1,2 @@
 num_heads,num_layers,hidden_dim,dropout_rate,learning_rate,weight_decay,fusion_method,activation_function
-4,6,384,0.4,0.000960215381221919,3.97822665000334e-06,hierarchical,gelu
+16,6,320,0.0,0.0008141052856325478,0.00016649563641918632,cross_attention,gelu
