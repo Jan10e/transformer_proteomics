@@ -132,10 +132,10 @@ venv.bak/
 pip-wheel-metadata/
 
 # Exclude all data directories
-data/
+# data/
 
 # Exclude specific data directories at any level
-**/data/
+# **/data/
 **/datasets/
 **/input/
 **/outputs/
