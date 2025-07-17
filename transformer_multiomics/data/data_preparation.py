@@ -117,3 +117,42 @@ def prepare_data_loaders(
     test_loader: DataLoader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_loader, val_loader, test_loader, input_dims, output_dim
+
+
+def prepare_test_data(data, omics_set, batch_size=32):
+    """
+    Prepare test data for prediction.
+
+    Parameters:
+    -----------
+    data : dict
+        Dictionary of DataFrames containing omics data.
+    omics_set : list
+        List of omics types to use for prediction.
+    batch_size : int
+        Batch size for the DataLoader.
+
+    Returns:
+    --------
+    data_loader : DataLoader
+        DataLoader containing the test data.
+    input_dims : dict
+        Dictionary mapping each omics type to its dimensionality.
+    """
+    # Prepare input data dictionary
+    X_dict = {}
+    for omics_type in omics_set:
+        if omics_type in data:
+            # Exclude patient ID column (assuming it's the first column)
+            X_dict[omics_type] = data[omics_type].iloc[:, 1:].values
+        else:
+            raise ValueError(f"Omics type '{omics_type}' not found in the provided data")
+
+    # Create input dimensions dictionary
+    input_dims = {omics_type: X.shape[1] for omics_type, X in X_dict.items()}
+
+    # Create dataset and dataloader
+    dataset = MultiOmicsDataset(X_dict, y=None)
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    return data_loader, input_dims
