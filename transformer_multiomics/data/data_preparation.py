@@ -8,29 +8,35 @@ from torch.utils.data import DataLoader, Dataset
 class MultiOmicsDataset(Dataset):
     """
     PyTorch Dataset for multi-omics data.
-    Each sample is a dictionary of omics features and a target value.
+    Each sample is a dictionary of omics features and optionally a target value.
     """
 
-    def __init__(self, X_dict: dict[str, np.ndarray], y: np.ndarray):
+    def __init__(self, X_dict: dict[str, np.ndarray], y: np.ndarray = None):
         """
         Args:
             X_dict: Dictionary mapping omics names to numpy arrays of features.
-            y: Array of target values.
+            y: Array of target values (optional).
         """
         self.X_dict: dict[str, torch.FloatTensor] = {k: torch.FloatTensor(v) for k, v in X_dict.items()}
-        self.y: torch.FloatTensor = torch.FloatTensor(y)
+        self.y: torch.FloatTensor = torch.FloatTensor(y) if y is not None else None
 
     def __len__(self) -> int:
         """Return the number of samples."""
         return len(next(iter(self.X_dict.values())))
 
-    def __getitem__(self, idx: int) -> tuple[dict[str, torch.FloatTensor], torch.FloatTensor]:
+    def __getitem__(
+        self, idx: int
+    ) -> tuple[dict[str, torch.FloatTensor], torch.FloatTensor] | dict[str, torch.FloatTensor]:
         """
         Get a single sample by index.
         Returns:
-            Tuple of (omics features dict, target tensor).
+            Tuple of (omics features dict, target tensor) if `y` is not None,
+            or just the omics features dict if `y` is None.
         """
-        return {k: v[idx] for k, v in self.X_dict.items()}, self.y[idx]
+        if self.y is not None:
+            return {k: v[idx] for k, v in self.X_dict.items()}, self.y[idx]
+        else:
+            return {k: v[idx] for k, v in self.X_dict.items()}
 
 
 def prepare_data_loaders(
