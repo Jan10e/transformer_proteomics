@@ -149,7 +149,7 @@ pip-wheel-metadata/
 *.hdf5
 *.npz
 *.npy
-*.png
+# *.png
 
 # Exclude playground folders
 playground/
